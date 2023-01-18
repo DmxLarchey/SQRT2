@@ -9,51 +9,63 @@
 
 Require Import Arith Lia Euclid Utf8.
 
+(* P is computationally decidable *)
+Definition dec P := { P } + { ¬ P }.
+
+Fact conj_dec (A B : Prop) : dec A → dec B → dec (A∧B).
+Proof. unfold dec; tauto. Qed. 
+
 Section minimizer.
 
   (* Minimization of a decidable and inhabited subset of nat, following
      Constructive Epsilon from the standard library *)
 
-  Variable (P : nat -> Prop) (Pdec : ∀n, { P n } + { ~ P n }).
+  Variable (P : nat → Prop) (Pdec : ∀n, dec (P n)).
 
-  Let R n m := n = S m ∧ ¬ P m.
+  Let Ω n m := n = S m ∧ ¬ P m.
 
   Section exP_Acc.
 
-    Let HR1 n : P n → Acc R n.
+    Let HR1 n : P n → Acc Ω n.
     Proof. constructor; now intros ? (? & []). Qed.
 
-    Let HR2 n : Acc R (S n) → Acc R n.
+    Let HR2 n : Acc Ω (S n) → Acc Ω n.
     Proof. constructor; now intros ? (-> & _). Qed. 
 
-    Local Fact exP_Acc : (∃n, P n) → Acc R 0.
+    Local Fact exP_Acc0 : (∃n, P n) → Acc Ω 0.
     Proof.
       intros (n & Hn%HR1); revert Hn.
       generalize 0 n (Nat.le_0_l n).
-      induction 1; eauto.
+      induction 1; auto.
     Qed.
 
   End exP_Acc.
 
-  Local Lemma minimizer_from n : Acc R n → { m | P m ∧ n ≤ m ∧ ∀i, P i → i < n ∨ m ≤ i }.
+  (* NB n := P holds Not Before n 
+     MIN := first value such that P *)
+  Let NB m := ∀i, P i → i < m → False.
+  Let MIN := { m | P m ∧ NB m }.
+
+  Let NB_0 : NB 0.
+  Proof. intros ? _ []%Nat.nlt_0_r. Qed.
+
+  Let NB_S n : NB n → ¬ P n → NB (S n).
   Proof.
-    induction 1 as [ n _ IHn ].
-    destruct (Pdec n) as [ Hn | Hn ].
-    + exists n; repeat split; auto; intros; lia.
-    + destruct (IHn (S n)) as (m & H1 & H2 & H3); try red; auto.
-      exists m; repeat split; auto; try lia.
-      intros i Hi.
-      destruct (H3 _ Hi) as [ H4%le_S_n | ]; try lia.
-      destruct H4; [easy | lia ].
+    intros H1 H2 i H3 H4%le_S_n.
+    destruct H4.
+    + tauto.
+    + apply (H1 _ H3), le_n_S, H4.
   Qed.
 
-  Theorem minimizer : (∃n, P n) → { m | P m ∧ ∀i, P i → i < m → False }.
-  Proof.
-    intros H%exP_Acc.
-    destruct minimizer_from with (1 := H) as (m & H1 & _ & H2).
-    exists m; split; auto.
-    intros ? []%H2; lia.
+  Let Fixpoint loop n (an : Acc Ω n) { struct an } : NB n → MIN.
+    refine (match Pdec n with
+      | left pn  => λ hn, exist _ n _
+      | right pn => λ hn, loop (S n) (Acc_inv an _) _
+    end); [ | red | ]; auto.
   Qed.
+
+  Definition minimizer : (∃n, P n) → MIN :=
+    λ hn, loop 0 (exP_Acc0 hn) NB_0.
 
 End minimizer.
 
@@ -69,7 +81,7 @@ Proof.
   + destruct (a-b); lia.
 Qed.
 
-Fact divides_dec p q : { p div q } + { ~ p div q }.
+Fact divides_dec p q : dec (p div q).
 Proof.
   destruct p as [ | p ].
   + destruct q as [ | q ].
@@ -81,13 +93,6 @@ Proof.
     * right; intros (k & <-).
       apply remainder_is_zero in E; lia.
 Qed.
-
-Fact conj_dec (A B : Prop) : 
-        { A } + { ~ A } 
-      → { B } + { ~ B } 
-      → { A∧B } 
-      + { ~ (A∧B) }.
-Proof. tauto. Qed. 
 
 (* Computes the quotient from assumption of divisibility *)
 Fact quotient p q : 0 < p → p div q → { x | x*p = q }.
@@ -101,6 +106,7 @@ Qed.
 
 Section sqrt2.
 
+  (** We assume a fraction p/q "equal" to √2, ie of which the square is 2 *)
   Variables (p q : nat) (Hq : 0 < q) (Hpq : p*p = 2*q*q).
 
   (** Below, we manipulate √2 in nat as p/q *)
@@ -108,8 +114,8 @@ Section sqrt2.
   Let Hp : 0 < p.
   Proof. destruct p; lia. Qed.
 
-   (* Can we replace the use of the minimizer with
-      strong induction ?? *)
+   (* QUESTION: can we replace the use of the minimizer with
+                strong induction ?? *)
 
   (** Let us build k minimal such that k√2 is strictly positive integer *)
 
@@ -159,7 +165,7 @@ Section sqrt2.
     ring.
   Qed.
 
-  (* d is larger than k *)
+  (* d is strictly larger than k *)
   Let Hd2 : k < d.
   Proof.
     destruct (le_lt_dec d k); auto.
