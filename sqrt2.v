@@ -18,7 +18,8 @@ Proof. unfold dec; tauto. Qed.
 Section minimizer.
 
   (* Minimization of a decidable and inhabited subset of nat, following
-     Constructive Epsilon from the standard library *)
+     Constructive Epsilon from the standard library 
+   *)
 
   Variable (P : nat → Prop) (Pdec : ∀n, dec (P n)).
 
@@ -47,22 +48,32 @@ Section minimizer.
   Let MIN := { m | P m ∧ NB m }.
 
   Let NB_0 : NB 0.
-  Proof. intros ? _ []%Nat.nlt_0_r. Qed.
+  Proof. now intros _ _ ?%Nat.nlt_0_r. Qed.
 
   Let NB_S n : NB n → ¬ P n → NB (S n).
   Proof.
     intros H1 H2 i H3 H4%le_S_n.
     destruct H4.
-    + tauto.
+    + apply H2, H3.
     + apply (H1 _ H3), le_n_S, H4.
   Qed.
 
   Let Fixpoint loop n (an : Acc Ω n) { struct an } : NB n → MIN.
     refine (match Pdec n with
-      | left pn  => λ hn, exist _ n _
-      | right pn => λ hn, loop (S n) (Acc_inv an _) _
+    | left pn  => λ hn, exist _ n _
+    | right pn => λ hn, loop (S n) (Acc_inv an _) _
     end); [ | red | ]; auto.
   Qed.
+
+  (** Notice that this "mnimizer" principle cannot be proved by 
+      induction on n only unless one assumes { n | P n } instead 
+      of the (generally) weaker (∃n, P n). These two are here 
+      equivalent because P is decidable over an enumerable type.
+
+      The weaker form { n | P n } → MIN (or equivalently
+      ∀n, P n → MIN) can be proved by induction on n and 
+      this would be enough as a minimization principle 
+      for the proof of √2 below. *)
 
   Definition minimizer : (∃n, P n) → MIN :=
     λ hn, loop 0 (exP_Acc0 hn) NB_0.
@@ -101,7 +112,7 @@ Proof.
   destruct (eucl_dev _ H1 q) as [ x r H3 H4 ].
   exists x.
   destruct H2 as (k & <-).
-  generalize (remainder_is_zero _ _ _ _ H3 H4); lia. 
+  generalize (remainder_is_zero _ _ _ _ H3 H4); lia.
 Qed.
 
 Section sqrt2.
@@ -114,8 +125,15 @@ Section sqrt2.
   Let Hp : 0 < p.
   Proof. destruct p; lia. Qed.
 
-   (* QUESTION: can we replace the use of the minimizer with
-                strong induction ?? *)
+  (* REMARKS & QUESTIONS: 
+       1) we can replace the minimizer 
+            ∀P, dec P → (∃n, P n) → { m | P m ∧ ∀i, P i → i < m → False }
+          with the weaker form
+            ∀P, dec P → ∀n, P n → { m | P m ∧ ∀i, P i → i < m → False }
+          and the below proof would still work.
+       2) the weaker minimizer can be proved by (strong) induction on n
+       3) can we replace the use of the minimizer directly with strong
+          induction on the proof below ? *)
 
   (** Let us build k minimal such that k√2 is strictly positive integer *)
 
@@ -204,6 +222,19 @@ Section sqrt2.
   (* By minimality of k, we get a contradiction *)
   Theorem sqrt2_nat_false : False.
   Proof. exact (Hk2 _ Hk2' Hk1'). Qed.
+
+  (** Concluding remarks: the above proof works as
+      well (and nearly as is) for √3 but fails for eg √5.
+      This is because while we have 1 < √2 (or √3) < 2, 
+      √5 > 2 does not enjoy this property.
+
+      Can we upgrade so proof to deal with √u where u is
+      not a square integer? For instance, can we use this 
+      proof to show √u = p/q (ie p² = uq²) to imply that
+      there is r st u = r² ? 
+
+      Can this even be upgraded to an algorithm for 
+      computing the square root ? *) 
 
 End sqrt2.
 
